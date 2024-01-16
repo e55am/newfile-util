@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# new -- create new file(s) from template
+
+# TODO
+# check if extract_templates func working probably
+
+
+usage() {
+	prog=$(basename "$0")
+	cat <<- __EOF__
+	Usage: $prog <FILE(S)>
+
+	Example:
+	  $prog ../spam.c foo.py
+	__EOF__
+}
+
+
+check_templates() {
+	# check if template dir exist, if not extract ./template archive
+	if ! [[ -d ~/Templates ]]; then
+		echo "WARNING: No such \"$USER/Templates\" directory" >&2
+		read -rp "Do you want to create \"$USER/Templates\" directory (y/n)? " answer
+
+		if [[ "$answer" == [Yy] ]]; then
+			echo "extracting templates"
+			# extract_templates
+		fi
+	fi
+}
+
+
+extract_templates() {
+	# extract template tar archive
+	if [[ -f ./templates ]]; then
+		tar -xf ./templates -C $HOME
+	fi
+}
+
+
+select_template() {
+	# select file template from $HOME/Templates dir
+
+	cat <<- __EOF__
+		choose one of the options (1/2):
+		  [1] Create plaintext file
+		  [2] Choose file extension
+		__EOF__
+
+	while ! [[ "$(echo "$option" | grep -Eo "[1|2]")" ]]; do
+		read -p ">> " option
+	done
+
+	return "$option"
+}
+
+
+locate_template() {
+	# find file end with specific extension/suffix
+
+	local src
+	src=$(find $HOME/Templates -iregex ".*\.$1$")
+
+	# below snip untested
+	# src=$(find $HOME/Templates -iname "*\.$1")
+
+	echo "$src"
+}
+
+
+cp_template() {
+	# copy template file from Templates dir to destination
+	#
+	# Arguments
+	# 	$1 path/to/new/file
+
+	SUFFIX=$(basename "$1" | cut -d "." -f2)
+	SRC_FILE=$(locate_template "$SUFFIX")
+
+	if [[ -n $SRC_FILE ]]; then
+		$VERBOSE && echo "copying file $SRC_FILE -> $1"
+		cp "$SRC_FILE" "$1"
+	else
+		echo "unknown/no suffix for file $1"
+		select_template
+		case "$?" in
+			1) touch "$1" ;;
+			2)
+				{
+					read -rp "extension >> " extension
+					if [[ -n $extension ]]; then
+						cp_template "$1$extension"
+					else
+						echo "creating empty plaintext file."
+						touch "$1"
+					fi
+				}
+				;;
+		esac
+	fi
+
+	edit_template "$1"
+}
+
+
+edit_template() {
+	# replace PROG with program name in file begging comment
+	#
+	# Arguments:
+	#	$1: path to file
+
+	prog_name=$(basename "$1")
+	sed -i "s/PROG/$prog_name/g" "$1"
+}
+
+
+main() {
+	check_templates
+
+	for i in "$@"; do
+		cp_template "$i"
+	done
+}
+
+
+VERBOSE=false
+
+if [ "$BASH_SOURCE" == "$0" ]; then
+	if [[ "$#" -eq 0 ]]; then
+		echo "Err: Missing Argument(s)" >&2
+		usage >&2
+		exit 1
+	fi
+
+	main "$@"
+fi
