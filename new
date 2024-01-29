@@ -2,8 +2,7 @@
 # new -- create new file(s) from template
 
 # TODO
-# check if extract_templates func working probably
-
+# add -h and --help option
 
 usage() {
 	prog=$(basename "$0")
@@ -19,12 +18,12 @@ usage() {
 check_templates() {
 	# check if template dir exist, if not extract ./template archive
 	if ! [[ -d ~/Templates ]]; then
-		echo "WARNING: No such \"$USER/Templates\" directory" >&2
-		read -rp "Do you want to create \"$USER/Templates\" directory (y/n)? " answer
+		echo "WARNING: No such \"$HOME/Templates\" directory" >&2
+		read -rp "Do you want to create \"$HOME/Templates\" directory (y/n)? " choice
 
-		if [[ "$answer" == [Yy] ]]; then
+		if [[ "${choice:0:1}" == [Yy] ]]; then
 			echo "extracting templates"
-			# extract_templates
+			extract_templates
 		fi
 	fi
 }
@@ -33,36 +32,48 @@ check_templates() {
 extract_templates() {
 	# extract template tar archive
 	if [[ -f ./templates ]]; then
-		tar -xf ./templates -C $HOME
+		tar -xf ./templates -C "$HOME/"
 	fi
 }
 
 
 select_template() {
 	# select file template from $HOME/Templates dir
+	#
+	# Return: (int)
+	# 		1 if user enter '1' or no input, to create plain text file
+	# 		2 if user want to select template
 
-	cat <<- __EOF__
-		choose one of the options (1/2):
-		  [1] Create plaintext file
-		  [2] Choose file extension
-		__EOF__
+	prompt_mssg="\nWould you like to:\n  [1] Create plaintext file
+	\r  [2] Choose file extension"
 
-	while ! [[ "$(echo "$option" | grep -Eo "[1|2]")" ]]; do
-		read -p ">> " option
-	done
+	echo -e "$prompt_mssg"
+	read  -e -n 1 -rp " >> " choice
+	case "$choice" in
+		1 | "")
+			return 1
+			;;
+		2)
+			return 2
+			;;
+		*)
+			echo -e "$RED Please choose 1 or 2.$WHITE"
+			select_template
+			;;
+	esac
 
-	return "$option"
+	return "$choice"
 }
 
 
 locate_template() {
 	# find file end with specific extension/suffix
+	#
+	# Returns:
+	# 		(string) path to template
 
 	local src
-	src=$(find $HOME/Templates -iregex ".*\.$1$")
-
-	# below snip untested
-	# src=$(find $HOME/Templates -iname "*\.$1")
+	src=$(find "$HOME/Templates" -iregex ".*\.$1$")
 
 	echo "$src"
 }
@@ -74,14 +85,14 @@ cp_template() {
 	# Arguments
 	# 	$1 path/to/new/file
 
-	SUFFIX=$(basename "$1" | cut -d "." -f2)
+	FILE=$1
+	SUFFIX=$(basename "$FILE" | rev | cut -d "." -f1 | rev)
 	SRC_FILE=$(locate_template "$SUFFIX")
 
 	if [[ -n $SRC_FILE ]]; then
-		$VERBOSE && echo "copying file $SRC_FILE -> $1"
 		cp "$SRC_FILE" "$1"
 	else
-		echo "unknown/no suffix for file $1"
+		echo -n "unknown/no suffix for file $FILE"
 		select_template
 		case "$?" in
 			1) touch "$1" ;;
@@ -89,22 +100,29 @@ cp_template() {
 				{
 					read -rp "extension >> " extension
 					if [[ -n $extension ]]; then
-						cp_template "$1$extension"
+						# if first char from suffix isn't '.' (dot)
+						# add dot and concatenate file name with suffix
+						if [[ ${extension:0:1} == "." ]]; then
+							FILE+="$extension"
+							cp_template "$FILE"
+						else
+							FILE+=".$extension"
+							cp_template "$FILE"
+						fi
 					else
-						echo "creating empty plaintext file."
-						touch "$1"
+						cp_template "$FILE"
 					fi
 				}
 				;;
 		esac
 	fi
 
-	edit_template "$1"
+	edit_template "$FILE"
 }
 
 
 edit_template() {
-	# replace PROG with program name in file begging comment
+	# replace PROG with program name in file begging comment (e.g docstring)
 	#
 	# Arguments:
 	#	$1: path to file
@@ -123,7 +141,8 @@ main() {
 }
 
 
-VERBOSE=false
+RED="\033[91m"
+WHITE="\033[m"
 
 if [ "$BASH_SOURCE" == "$0" ]; then
 	if [[ "$#" -eq 0 ]]; then
