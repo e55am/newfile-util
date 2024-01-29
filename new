@@ -17,9 +17,9 @@ usage() {
 
 check_templates() {
 	# check if template dir exist, if not extract ./template archive
-	if ! [[ -d ~/Templates ]]; then
-		echo "WARNING: No such \"$HOME/Templates\" directory" >&2
-		read -rp "Do you want to create \"$HOME/Templates\" directory (y/n)? " choice
+	if ! [[ -d $TEMPLATE_DIR ]]; then
+		echo "WARNING: No such \"$TEMPLATE_DIR\" directory" >&2
+		read -rp "Do you want to create \"$TEMPLATE_DIR\" directory (y/n)? " choice
 
 		if [[ "${choice:0:1}" == [Yy] ]]; then
 			echo "extracting templates"
@@ -36,16 +36,37 @@ extract_templates() {
 	fi
 }
 
-
-select_template() {
+select_suffix() {
 	# select file template from $HOME/Templates dir
+
+	FILE=$1
+
+	read -rp "extension >> " extension
+	if [[ -n $extension ]]; then
+		# if first char from suffix isn't '.' (dot)
+		# add dot and concatenate file name with suffix
+		if [[ ${extension:0:1} == "." ]]; then
+			FILE+="$extension"
+			# cp_template "$FILE"
+		else
+			FILE+=".$extension"
+			# cp_template "$FILE"
+		fi
+	fi
+
+	echo "$FILE"
+}
+
+
+no_template() {
+	# if there no predefined template for FILE
 	#
 	# Return: (int)
 	# 		1 if user enter '1' or no input, to create plain text file
 	# 		2 if user want to select template
 
 	prompt_mssg="\nWould you like to:\n  [1] Create plaintext file
-	\r  [2] Choose file extension"
+	\r  [2] Choose file suffix/extension"
 
 	echo -e "$prompt_mssg"
 	read  -e -n 1 -rp " >> " choice
@@ -58,7 +79,7 @@ select_template() {
 			;;
 		*)
 			echo -e "$RED Please choose 1 or 2.$WHITE"
-			select_template
+			no_template
 			;;
 	esac
 
@@ -73,7 +94,7 @@ locate_template() {
 	# 		(string) path to template
 
 	local src
-	src=$(find "$HOME/Templates" -iregex ".*\.$1$")
+	src=$(find "$TEMPLATE_DIR" -iregex ".*\.$1$")
 
 	echo "$src"
 }
@@ -93,26 +114,14 @@ cp_template() {
 		cp "$SRC_FILE" "$1"
 	else
 		echo -n "unknown/no suffix for file $FILE"
-		select_template
+		no_template
 		case "$?" in
-			1) touch "$1" ;;
+			1)
+				touch "$FILE"
+				;;
 			2)
-				{
-					read -rp "extension >> " extension
-					if [[ -n $extension ]]; then
-						# if first char from suffix isn't '.' (dot)
-						# add dot and concatenate file name with suffix
-						if [[ ${extension:0:1} == "." ]]; then
-							FILE+="$extension"
-							cp_template "$FILE"
-						else
-							FILE+=".$extension"
-							cp_template "$FILE"
-						fi
-					else
-						cp_template "$FILE"
-					fi
-				}
+				FILE=$(select_suffix "$FILE")
+				touch "$FILE"
 				;;
 		esac
 	fi
@@ -143,6 +152,7 @@ main() {
 
 RED="\033[91m"
 WHITE="\033[m"
+TEMPLATE_DIR="$HOME/Templates/"
 
 if [ "$BASH_SOURCE" == "$0" ]; then
 	if [[ "$#" -eq 0 ]]; then
