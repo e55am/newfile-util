@@ -1,22 +1,41 @@
 #!/usr/bin/env bash
-# new -- create new file(s) from template
+# new -- create new file(s) from predefined template
+#
+# Author: essam 'https://github.com/e55am'
 
-# TODO
-# add -h and --help option
 
-usage() {
-	prog=$(basename "$0")
+usage() { echo "Usage: $PROG [-h] <FILEs>"; }
+
+
+_help() {
 	cat <<- __EOF__
-	Usage: $prog <FILE(S)>
+	$(usage)
+
+	Create new file from predefined template
+
+	Arguments:
+	  FILE		File name to be created
+
+	Option:
+	  -h		show this help message and exit
+
+	Exit Status:
+	Returns success (0) if all File created; fails (1) if no argument.
 
 	Example:
-	  $prog ../spam.c foo.py
+	Create foo.py and spam.py in current dir
+	  $PROG foo.py spam.py
+
+	Create foo.c foo.h at path/to/dir/
+	  $PROG path/to/dir/foo.{h,c}
+
 	__EOF__
 }
 
 
 check_templates() {
 	# check if template dir exist, if not extract ./template archive
+
 	if ! [[ -d $TEMPLATE_DIR ]]; then
 		echo "WARNING: No such \"$TEMPLATE_DIR\" directory" >&2
 		read -rp "Do you want to create \"$TEMPLATE_DIR\" directory (y/n)? " choice
@@ -31,6 +50,7 @@ check_templates() {
 
 extract_templates() {
 	# extract template tar archive
+
 	if [[ -f ./templates ]]; then
 		tar -xf ./templates -C "$HOME/"
 	fi
@@ -38,7 +58,12 @@ extract_templates() {
 
 select_suffix() {
 	# select file template from $HOME/Templates dir
-
+	#
+	# Arguments: (str)
+	# 		$1: filename
+	#
+	# Returns: (str)
+	#		new filename (filename + suffix/extension)
 	FILE=$1
 
 	read -rp "extension >> " extension
@@ -47,10 +72,8 @@ select_suffix() {
 		# add dot and concatenate file name with suffix
 		if [[ ${extension:0:1} == "." ]]; then
 			FILE+="$extension"
-			# cp_template "$FILE"
 		else
 			FILE+=".$extension"
-			# cp_template "$FILE"
 		fi
 	fi
 
@@ -63,7 +86,7 @@ no_template() {
 	#
 	# Return: (int)
 	# 		1 if user enter '1' or no input, to create plain text file
-	# 		2 if user want to select template
+	# 		2 if user want to select suffix
 
 	prompt_mssg="\nWould you like to:\n  [1] Create plaintext file
 	\r  [2] Choose file suffix/extension"
@@ -78,7 +101,7 @@ no_template() {
 			return 2
 			;;
 		*)
-			echo -e "$RED Please choose 1 or 2.$WHITE"
+			echo -e "$RED\rPlease choose 1 or 2.$WHITE"
 			no_template
 			;;
 	esac
@@ -90,8 +113,8 @@ no_template() {
 locate_template() {
 	# find file end with specific extension/suffix
 	#
-	# Returns:
-	# 		(string) path to template
+	# Returns: (string)
+	# 		path to template
 
 	local src
 	src=$(find "$TEMPLATE_DIR" -iregex ".*\.$1$")
@@ -144,19 +167,35 @@ edit_template() {
 main() {
 	check_templates
 
+	while getopts ":h" opt; do
+		case "$opt" in
+			'h' )
+				_help
+				exit 0
+				;;
+			* )
+				echo "Invalid option: -$OPTARG" >&2
+				usage >&2
+				exit 1
+				;;
+		esac
+	done
+	shift $((OPTIND-1))
+
 	for i in "$@"; do
 		cp_template "$i"
 	done
 }
 
 
+PROG=$(basename "$0")
 RED="\033[91m"
 WHITE="\033[m"
 TEMPLATE_DIR="$HOME/Templates/"
 
 if [ "$BASH_SOURCE" == "$0" ]; then
 	if [[ "$#" -eq 0 ]]; then
-		echo "Err: Missing Argument(s)" >&2
+		echo -e "Err: No Argument(s)" >&2
 		usage >&2
 		exit 1
 	fi
