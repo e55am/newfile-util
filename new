@@ -2,6 +2,9 @@
 # new -- create new file(s) from predefined template
 #
 # Author: essam 'https://github.com/e55am'
+#
+# TODO
+# use regex `~=' instead of grep in check template and no_template func
 
 
 usage() { echo "Usage: $PROG [-h] <FILEs>"; }
@@ -134,7 +137,7 @@ cp_template() {
 	SRC_FILE=$(locate_template "$SUFFIX")
 
 	if [[ -n $SRC_FILE ]]; then
-		cp "$SRC_FILE" "$1"
+		cp -i "$SRC_FILE" "$1"
 	else
 		echo -n "unknown/no suffix for file $FILE"
 		no_template
@@ -144,7 +147,7 @@ cp_template() {
 				;;
 			2)
 				FILE=$(select_suffix "$FILE")
-				touch "$FILE"
+				cp_template "$FILE"
 				;;
 		esac
 	fi
