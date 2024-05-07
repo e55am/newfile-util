@@ -2,28 +2,20 @@
 # new -- create new file(s) from predefined template
 #
 # Author: essam 'https://github.com/e55am'
-#
-# TODO
-# use regex `~=' instead of grep in check template and no_template func
 
 
-usage() { echo "Usage: $PROG [-h] <FILEs>"; }
+__usage__() { echo "Usage: $PROG [-h] FILE..."; }
 
-
-_help() {
+__help__() {
 	cat <<- __EOF__
-	$(usage)
+	$(__usage__)
+	Create new file from predefined template.
 
-	Create new file from predefined template
-
-	Arguments:
-	  FILE		File name to be created
+	Parameter:
+	  FILE  One or more file name to create
 
 	Option:
-	  -h		show this help message and exit
-
-	Exit Status:
-	Returns success (0) if all File created; fails (1) if no argument.
+	  -h    show this help message and exit
 
 	Example:
 	Create foo.py and spam.py in current dir
@@ -41,10 +33,10 @@ check_templates() {
 
 	if ! [[ -d $TEMPLATE_DIR ]]; then
 		echo "WARNING: No such \"$TEMPLATE_DIR\" directory" >&2
-		read -rp "Do you want to create \"$TEMPLATE_DIR\" directory (y/n)? " choice
+		read -n 1 -rp "Create \"$TEMPLATE_DIR\" directory (y/n)? " choice
 
-		if [[ "${choice:0:1}" == [Yy] ]]; then
-			echo "extracting templates"
+		if [[ "$choice" =~ ^(Y|y) ]]; then
+			echo "Extracting templates..."
 			extract_templates
 		fi
 	fi
@@ -59,111 +51,89 @@ extract_templates() {
 	fi
 }
 
-select_suffix() {
+
+select_extension() {
 	# select file template from $HOME/Templates dir
-	#
-	# Arguments: (str)
-	# 		$1: filename
-	#
-	# Returns: (str)
-	#		new filename (filename + suffix/extension)
-	FILE=$1
 
-	read -rp "extension >> " extension
-	if [[ -n $extension ]]; then
-		# if first char from suffix isn't '.' (dot)
-		# add dot and concatenate file name with suffix
-		if [[ ${extension:0:1} == "." ]]; then
-			FILE+="$extension"
-		else
-			FILE+=".$extension"
-		fi
-	fi
+	OLD_FILE="$FILE"
 
-	echo "$FILE"
+	while [[ -z "$SRC_FILE" ]]; do
+		FILE="$OLD_FILE"	# don't concatenate extension
+
+		read -p "extension >> " -r extension
+		# if extension don't start with `.`, insert it
+		[[ "$extension" =~ ^\. ]] && FILE+="$extension" || FILE+=".$extension"
+		EXTN="${FILE##*.}"
+		locate_template
+	done
 }
 
 
 no_template() {
-	# if there no predefined template for FILE
-	#
-	# Return: (int)
-	# 		1 if user enter '1' or no input, to create plain text file
-	# 		2 if user want to select suffix
+
+	local usr_choice
 
 	prompt_mssg="\nWould you like to:\n  [1] Create plaintext file
-	\r  [2] Choose file suffix/extension"
-
+	\r  [2] Choose file extension"
 	echo -e "$prompt_mssg"
-	read  -e -n 1 -rp " >> " choice
-	case "$choice" in
-		1 | "")
-			return 1
-			;;
-		2)
-			return 2
-			;;
-		*)
-			echo -e "$RED\rPlease choose 1 or 2.$WHITE"
-			no_template
-			;;
-	esac
 
-	return "$choice"
+	while ! [[ "$usr_choice" =~ ^(1|2)$ ]]; do
+		echo "Please choose 1 or 2."
+		read -p ">> " -r usr_choice
+	done
+
+	if [[ "$usr_choice" -eq 1 ]]; then
+		EXTN="txt"
+		locate_template
+
+	elif [[ "$usr_choice" -eq 2 ]]; then
+			select_extension
+	fi
+
 }
 
 
 locate_template() {
-	# find file end with specific extension/suffix
-	#
-	# Returns: (string)
-	# 		path to template
+	# find file end with specific extension
 
-	local src
-	src=$(find "$TEMPLATE_DIR" -iregex ".*\.$1$")
+	SRC_FILE="$(find "$TEMPLATE_DIR" -iregex ".*\.$EXTN$")"
 
-	echo "$src"
 }
 
 
 cp_template() {
 	# copy template file from Templates dir to destination
 	#
-	# Arguments
+	# Parameter
 	# 	$1 path/to/new/file
 
-	FILE=$1
-	SUFFIX=$(basename "$FILE" | rev | cut -d "." -f1 | rev)
-	SRC_FILE=$(locate_template "$SUFFIX")
+	FILE="$1"
+	EXTN="${FILE##*.}"
+	SRC_FILE=
 
-	if [[ -n $SRC_FILE ]]; then
-		cp -i "$SRC_FILE" "$1"
-	else
-		echo -n "unknown/no suffix for file $FILE"
+	if [[ -z "$EXTN" ]]; then
+		echo "no extension for file $FILE."
 		no_template
-		case "$?" in
-			1)
-				touch "$FILE"
-				;;
-			2)
-				FILE=$(select_suffix "$FILE")
-				cp_template "$FILE"
-				;;
-		esac
+	else
+		locate_template
+
+		[[ -z "$SRC_FILE" ]] && no_template
 	fi
 
-	edit_template "$FILE"
+	cp -i "$SRC_FILE" "$FILE" && edit_template
+
+	# unset vars for next file, if any
+	FILE=
+	EXTN=
+	SRC_FILE=
 }
 
 
 edit_template() {
 	# replace PROG with program name in file begging comment (e.g docstring)
-	#
-	# Arguments:
-	#	$1: path to file
 
-	prog_name=$(basename "$1")
-	sed -i "s/PROG/$prog_name/g" "$1"
+	file_name="${FILE##*/}"
+	sed -i "s/PROG/$file_name/g" "$FILE"
 }
 
 
@@ -173,12 +143,12 @@ main() {
 	while getopts ":h" opt; do
 		case "$opt" in
 			'h' )
-				_help
+				__help__
 				exit 0
 				;;
 			* )
 				echo "Invalid option: -$OPTARG" >&2
-				usage >&2
+				__usage__ >&2
 				exit 1
 				;;
 		esac
@@ -191,15 +161,13 @@ main() {
 }
 
 
-PROG=$(basename "$0")
-RED="\033[91m"
-WHITE="\033[m"
+PROG="${0##*/}"
 TEMPLATE_DIR="$HOME/Templates/"
 
-if [ "$BASH_SOURCE" == "$0" ]; then
+if [[ "$BASH_SOURCE" == "$0" ]]; then
 	if [[ "$#" -eq 0 ]]; then
 		echo -e "Err: No Argument(s)" >&2
-		usage >&2
+		__usage__ >&2
 		exit 1
 	fi
 
