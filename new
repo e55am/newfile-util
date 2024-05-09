@@ -28,30 +28,6 @@ __help__() {
 }
 
 
-check_templates() {
-	# check if template dir exist, if not extract ./template archive
-
-	if ! [[ -d $TEMPLATE_DIR ]]; then
-		echo "WARNING: No such \"$TEMPLATE_DIR\" directory" >&2
-		read -n 1 -rp "Create \"$TEMPLATE_DIR\" directory (y/n)? " choice
-
-		if [[ "$choice" =~ ^(Y|y) ]]; then
-			echo "Extracting templates..."
-			extract_templates
-		fi
-	fi
-}
-
-
-extract_templates() {
-	# extract template tar archive
-
-	if [[ -f ./templates ]]; then
-		tar -xf ./templates -C "$HOME/"
-	fi
-}
-
-
 select_extension() {
 	# select file template from $HOME/Templates dir
 
@@ -73,11 +49,8 @@ no_template() {
 
 	local usr_choice
 
-	prompt_mssg="\nWould you like to:\n  [1] Create plaintext file
-	\r  [2] Choose file extension"
-	echo -e "$prompt_mssg"
-
-	while ! [[ "$usr_choice" =~ ^(1|2)$ ]]; do
+	echo -e "Would you like to:\n  [1] Create plaintext file\n  [2] Choose file extension"
+	until [[ "$usr_choice" =~ ^(1|2)$ ]]; do
 		echo "Please choose 1 or 2."
 		read -p ">> " -r usr_choice
 	done
@@ -108,16 +81,16 @@ cp_template() {
 	# 	$1 path/to/new/file
 
 	FILE="$1"
-	EXTN="${FILE##*.}"
+	[[ $FILE =~ \..+ ]] && EXTN="${FILE##*.}" || EXTN=
 	SRC_FILE=
 
 	if [[ -z "$EXTN" ]]; then
-		echo "no extension for file $FILE."
+		echo "no extension for file '$FILE'."
 		no_template
 	else
 		locate_template
 
-		[[ -z "$SRC_FILE" ]] && no_template
+		[[ -z "$SRC_FILE" ]] && { echo "no template file for .$EXTN"; no_template; }
 	fi
 
 	cp -i "$SRC_FILE" "$FILE" && edit_template
@@ -138,7 +111,12 @@ edit_template() {
 
 
 main() {
-	check_templates
+
+	# check if template dir exist
+	[[ -d "$TEMPLATE_DIR" ]] || {
+		echo "No 'Templates' directory found! Abort." >&2
+		exit 1
+	}
 
 	while getopts ":h" opt; do
 		case "$opt" in
