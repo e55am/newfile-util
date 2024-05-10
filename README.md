@@ -45,6 +45,7 @@ new [-h] FILE...
 
 Option:
   -h    Print help message.
+  -s    Don't prompt user if no template found.
 
 ```
 
