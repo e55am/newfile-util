@@ -15,7 +15,8 @@ __help__() {
 	  FILE  One or more file name to create
 
 	Option:
-	  -h    show this help message and exit
+	  -h    Show this help message and exit.
+	  -s    Don't prompt user if no template found.
 
 	Example:
 	Create foo.py and spam.py in current dir
@@ -48,6 +49,15 @@ select_extension() {
 no_template() {
 
 	local usr_choice
+
+	if [[ "$SILENT" -eq 1 ]]; then
+		EXTN="txt"
+		locate_template
+		return
+	fi
+
+	[[ -z "$EXTN" ]] && echo "no extension for file '$FILE'."
+	[[ -n "$EXTN" && -z "$SRC_FILE" ]] && echo "no template file for .$EXTN"
 
 	echo -e "Would you like to:\n  [1] Create plaintext file\n  [2] Choose file extension"
 	until [[ "$usr_choice" =~ ^(1|2)$ ]]; do
@@ -85,15 +95,17 @@ cp_template() {
 	SRC_FILE=
 
 	if [[ -z "$EXTN" ]]; then
-		echo "no extension for file '$FILE'."
 		no_template
 	else
 		locate_template
-
-		[[ -z "$SRC_FILE" ]] && { echo "no template file for .$EXTN"; no_template; }
+		[[ -z "$SRC_FILE" ]] && no_template
 	fi
 
-	cp -i "$SRC_FILE" "$FILE" && edit_template
+	if [[ "$SILENT" -eq 1 ]]; then
+		cp "$SRC_FILE" "$FILE" && edit_template
+	else
+		cp -i "$SRC_FILE" "$FILE" && edit_template
+	fi
 
 	# unset vars for next file, if any
 	FILE=
@@ -118,12 +130,14 @@ main() {
 		exit 1
 	}
 
-	while getopts ":h" opt; do
+	while getopts ":hs" opt; do
 		case "$opt" in
 			'h' )
 				__help__
 				exit 0
 				;;
+			's' )
+				SILENT=1 ;;
 			* )
 				echo "Invalid option: -$OPTARG" >&2
 				__usage__ >&2
@@ -141,6 +155,7 @@ main() {
 
 PROG="${0##*/}"
 TEMPLATE_DIR="$HOME/Templates/"
+SILENT=0	# prompt user
 
 if [[ "$BASH_SOURCE" == "$0" ]]; then
 	if [[ "$#" -eq 0 ]]; then
